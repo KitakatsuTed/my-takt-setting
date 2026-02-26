@@ -1,0 +1,20 @@
+# takt runtime files
+.takt/runs/
+.takt/persona_sessions.json
+.takt/*.log
+.takt/*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Temporary research files
+*.tmp.md
+
+# Obsidian settings
+.obsidian/

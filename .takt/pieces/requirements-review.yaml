@@ -1,0 +1,295 @@
+name: requirements-review
+description: 要件定義品質レビュー - ビジネス・UX・技術の3観点から並列にレビューし統合結果を出力
+piece_config:
+  provider_options:
+    codex:
+      network_access: true
+    opencode:
+      network_access: true
+max_movements: 10
+initial_movement: gather
+interactive_mode: assistant
+
+personas:
+  planner: ../facets/personas/requirements-planner.md
+  checker: ../facets/personas/requirements-checker.md
+  supervisor: research-supervisor
+
+policies:
+  requirements: ../facets/policies/requirements.md
+
+knowledge:
+  documents: ../facets/knowledge/requirements-documents.md
+  consistency: ../facets/knowledge/consistency-patterns.md
+
+movements:
+  # Step 1: レビュー対象の情報収集
+  - name: gather
+    persona: planner
+    policy: requirements
+    knowledge: documents
+    edit: false
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - WebSearch
+      - WebFetch
+    instruction_template: |
+      要件定義ドキュメント群を把握し、品質レビューの準備をしてください。
+
+      **やること:**
+      1. 指定されたディレクトリまたはファイルから要件定義ドキュメントを特定する
+      2. 各ドキュメントの概要を把握する
+      3. プロジェクトの特性（規模、業種、技術スタック等）を理解する
+      4. レビュー準備状況をまとめる
+    output_contracts:
+      report:
+        - name: 00-review-target.md
+          format: |
+            ```markdown
+            # 品質レビュー対象
+
+            ## プロジェクト概要
+            {プロジェクトの特性の要約}
+
+            ## ドキュメント一覧
+            | # | ドキュメント種別 | ファイル | 概要 |
+            |---|----------------|---------|------|
+            | 1 | {種別} | {パス} | {概要} |
+
+            ## レビュー準備状況
+            | レビュー観点 | 実行可否 | 理由 |
+            |------------|---------|------|
+            | ビジネス観点 | 可/不可 | {理由} |
+            | UX観点 | 可/不可 | {理由} |
+            | 技術観点 | 可/不可 | {理由} |
+            ```
+    rules:
+      - condition: レビュー対象の情報収集完了
+        next: reviewers
+      - condition: ドキュメントが見つからない、レビュー不可能
+        next: ABORT
+
+  # Step 2: 3観点並列レビュー
+  - name: reviewers
+    parallel:
+      - name: business-review
+        persona: checker
+        policy: requirements
+        knowledge: documents
+        edit: false
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - WebSearch
+          - WebFetch
+        instruction_template: |
+          要件定義ドキュメントをビジネス価値の観点からレビューしてください。
+
+          **レビュー対象情報:**
+          {report:00-review-target.md}
+
+          **評価観点:**
+          1. ビジネスゴールの明確さ・定量性（KPIが具体的か）
+          2. ROIの現実性（期待効果が過大でないか）
+          3. スコープの適切さ（広すぎ/狭すぎないか）
+          4. ステークホルダーの網羅性（重要な関係者が漏れていないか）
+          5. 市場・競合環境の考慮（外部環境が反映されているか）
+          6. リスク対策の十分性（ビジネスリスクが考慮されているか）
+        output_contracts:
+          report:
+            - name: 01-business-review.md
+              format: |
+                ```markdown
+                # ビジネス観点レビュー結果
+
+                ## 総合評価: A / B / C / D
+
+                ## 評価詳細
+                | 評価項目 | 評価 | コメント |
+                |---------|------|---------|
+                | ゴールの明確さ | A-D | {コメント} |
+                | KPIの定量性 | A-D | {コメント} |
+                | スコープの適切さ | A-D | {コメント} |
+                | ステークホルダー網羅性 | A-D | {コメント} |
+                | リスク対策 | A-D | {コメント} |
+
+                ## 主要な指摘事項
+                | # | 重大度 | 指摘内容 | 改善提案 |
+                |---|--------|---------|---------|
+                | 1 | {H/M/L} | {指摘} | {提案} |
+                ```
+        rules:
+          - condition: レビュー完了
+          - condition: レビュー不可能
+
+      - name: ux-review
+        persona: checker
+        policy: requirements
+        knowledge: documents
+        edit: false
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - WebSearch
+          - WebFetch
+        instruction_template: |
+          要件定義ドキュメントをユーザー体験の観点からレビューしてください。
+
+          **レビュー対象情報:**
+          {report:00-review-target.md}
+
+          **評価観点:**
+          1. 業務フローの効率性（To-Beで本当に改善されるか）
+          2. 画面遷移の自然さ（ユーザーが迷わないか）
+          3. ワイヤーフレームの使いやすさ（直感的に操作できるか）
+          4. ユーザーペルソナの適切さ（対象ユーザーが明確か）
+          5. エラーケースの考慮（異常系が想定されているか）
+          6. アクセシビリティの考慮（多様なユーザーへの配慮）
+        output_contracts:
+          report:
+            - name: 02-ux-review.md
+              format: |
+                ```markdown
+                # UX観点レビュー結果
+
+                ## 総合評価: A / B / C / D
+
+                ## 評価詳細
+                | 評価項目 | 評価 | コメント |
+                |---------|------|---------|
+                | 業務フローの効率性 | A-D | {コメント} |
+                | 画面遷移の自然さ | A-D | {コメント} |
+                | UIの使いやすさ | A-D | {コメント} |
+                | エラーケースの考慮 | A-D | {コメント} |
+                | アクセシビリティ | A-D | {コメント} |
+
+                ## 主要な指摘事項
+                | # | 重大度 | 指摘内容 | 改善提案 |
+                |---|--------|---------|---------|
+                | 1 | {H/M/L} | {指摘} | {提案} |
+                ```
+        rules:
+          - condition: レビュー完了
+          - condition: レビュー不可能
+
+      - name: tech-review
+        persona: checker
+        policy: requirements
+        knowledge: documents
+        edit: false
+        allowed_tools:
+          - Read
+          - Glob
+          - Grep
+          - WebSearch
+          - WebFetch
+        instruction_template: |
+          要件定義ドキュメントを技術実現性の観点からレビューしてください。
+
+          **レビュー対象情報:**
+          {report:00-review-target.md}
+
+          **評価観点:**
+          1. 技術的実現可能性（現在の技術で実現できるか）
+          2. 非機能要件の現実性（性能目標が現実的か）
+          3. セキュリティ要件の十分性（OWASP Top 10をカバーしているか）
+          4. インフラ構成の適切さ（可用性目標に合致するか）
+          5. 開発規模の見積もり妥当性（チーム規模・期間に対して適切か）
+          6. 技術的リスクの特定（新技術導入、データ移行等）
+        output_contracts:
+          report:
+            - name: 03-tech-review.md
+              format: |
+                ```markdown
+                # 技術観点レビュー結果
+
+                ## 総合評価: A / B / C / D
+
+                ## 評価詳細
+                | 評価項目 | 評価 | コメント |
+                |---------|------|---------|
+                | 技術的実現可能性 | A-D | {コメント} |
+                | 非機能要件の現実性 | A-D | {コメント} |
+                | セキュリティ要件の十分性 | A-D | {コメント} |
+                | インフラ構成の適切さ | A-D | {コメント} |
+                | 開発規模の妥当性 | A-D | {コメント} |
+                | 技術的リスク | A-D | {コメント} |
+
+                ## 主要な指摘事項
+                | # | 重大度 | 指摘内容 | 改善提案 |
+                |---|--------|---------|---------|
+                | 1 | {H/M/L} | {指摘} | {提案} |
+                ```
+        rules:
+          - condition: レビュー完了
+          - condition: レビュー不可能
+
+    rules:
+      - condition: any("レビュー完了")
+        next: synthesize
+
+  # Step 3: レビュー結果統合
+  - name: synthesize
+    persona: supervisor
+    policy: requirements
+    knowledge: documents
+    edit: false
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+    pass_previous_response: false
+    instruction_template: |
+      3つの品質レビュー結果を統合し、最終レビューレポートを作成してください。
+
+      **やること:**
+      1. Report Directory内の全レビューレポートを読む
+         - `00-review-target.md`（レビュー対象情報）
+         - `01-business-review.md`（ビジネス観点）
+         - `02-ux-review.md`（UX観点）
+         - `03-tech-review.md`（技術観点）
+      2. 3つのレビュー結果を統合する
+      3. 総合評価と改善の優先順位を提示する
+      4. 具体的な改善アクションを提示する
+    output_contracts:
+      report:
+        - name: review-summary.md
+          format: |
+            ```markdown
+            # 要件定義品質レビュー総合レポート
+
+            ## 総合評価: A / B / C / D
+            （A: 高品質、B: 軽微な改善推奨、C: 修正必要、D: 大幅な見直し必要）
+
+            ## サマリー
+            {2-3文で全レビュー結果を統合}
+
+            ## レビュー結果一覧
+            | レビュー観点 | 評価 | 主要な発見 |
+            |------------|------|-----------|
+            | ビジネス | A-D | {概要} |
+            | UX | A-D | {概要} |
+            | 技術 | A-D | {概要} |
+
+            ## 重大な指摘事項
+            | # | 観点 | 重大度 | 指摘内容 | 改善提案 |
+            |---|------|--------|---------|---------|
+            | 1 | {観点} | High | {指摘} | {提案} |
+
+            ## 改善提案（優先度順）
+            1. {最優先の改善提案}
+            2. {次の改善提案}
+
+            ## 評価基準
+            - A: 高品質。そのまま次フェーズに進行可
+            - B: 軽微な改善推奨。指摘事項を修正すればOK
+            - C: 修正必要。指摘事項を修正してから再レビュー推奨
+            - D: 大幅な見直し必要。根本的な見直しが必要
+            ```
+    rules:
+      - condition: 統合レビューの作成完了
+        next: COMPLETE

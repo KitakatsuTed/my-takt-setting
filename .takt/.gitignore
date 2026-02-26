@@ -1,0 +1,47 @@
+# Ignore everything by default
+*
+
+# This file itself
+!.gitignore
+
+# README
+!README.md
+
+# Project configuration
+!config.yaml
+
+# Pieces (version-controlled)
+!pieces/
+!pieces/**
+
+# Facets directory structure (version-controlled)
+!facets/
+!facets/**
+!facets/personas/
+!facets/personas/**
+!facets/policies/
+!facets/policies/**
+!facets/knowledge/
+!facets/knowledge/**
+!facets/instructions/
+!facets/instructions/**
+!facets/output-contracts/
+!facets/output-contracts/**
+
+# Legacy flat structure (version-controlled)
+!personas/
+!personas/**
+!policies/
+!policies/**
+!knowledge/
+!knowledge/**
+!instructions/
+!instructions/**
+!output-contracts/
+!output-contracts/**
+
+# Exclude runtime/temporary files
+runs/
+*.log
+*.tmp
+persona_sessions.json

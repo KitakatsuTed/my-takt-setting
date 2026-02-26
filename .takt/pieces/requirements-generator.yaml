@@ -1,0 +1,377 @@
+name: requirements-generator
+description: 要件定義テンプレート自動生成 - プロジェクト概要から11種のコアドキュメントを生成
+piece_config:
+  provider_options:
+    codex:
+      network_access: true
+    opencode:
+      network_access: true
+max_movements: 20
+initial_movement: gather-info
+interactive_mode: assistant
+
+personas:
+  planner: ../facets/personas/requirements-planner.md
+  writer: ../facets/personas/requirements-writer.md
+  supervisor: research-supervisor
+
+policies:
+  requirements: ../facets/policies/requirements.md
+
+knowledge:
+  documents: ../facets/knowledge/requirements-documents.md
+  consistency: ../facets/knowledge/consistency-patterns.md
+
+movements:
+  # Phase 1: プロジェクト情報の整理・生成計画
+  - name: gather-info
+    persona: planner
+    policy: requirements
+    knowledge: documents
+    edit: false
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - WebSearch
+      - WebFetch
+    instruction_template: |
+      ユーザーのプロジェクト概要を分析し、要件定義ドキュメント生成に必要な情報を整理してください。
+
+      **やること:**
+      1. プロジェクト概要から以下を抽出する
+         - プロジェクトの目的・背景
+         - 対象ユーザー・ステークホルダー
+         - 主要な機能・要件（推測を含む）
+         - 技術的制約・前提条件
+      2. 不足している情報を特定し、合理的な仮定を設定する
+      3. 11種のドキュメント生成計画を作成する（生成順序・各ドキュメントの重点項目）
+      4. ID体系（BRD-/REQ-/FUNC-/SCR-/NFR-/SEC-）を定義する
+
+      **注意:** 質問しない。情報が不足していれば「仮定: ...」と明記して進める。
+
+      **注意:** Previous Responseがある場合はvalidateからの差し戻し。
+      フィードバックを反映した計画を修正してください。
+    output_contracts:
+      report:
+        - name: 00-generation-plan.md
+          format: |
+            ```markdown
+            # 要件定義ドキュメント生成計画
+
+            ## プロジェクト概要（整理後）
+            {プロジェクトの目的・背景・ユーザー・制約の要約}
+
+            ## 仮定一覧
+            | # | 項目 | 仮定内容 | 根拠 |
+            |---|------|---------|------|
+            | 1 | {項目} | {仮定} | {根拠} |
+
+            ## ID体系
+            | ドキュメント | プレフィックス | 例 |
+            |------------|----------------|-----|
+            | ビジネス要件 | BRD- | BRD-001 |
+
+            ## 生成計画
+            | Phase | ドキュメント | 生成順 | 重点項目 |
+            |-------|------------|--------|---------|
+            | Core | BRD, 業務フロー, 要求一覧 | 1 | {重点} |
+            | Screens | 機能一覧, 画面一覧, 画面遷移図, ワイヤーフレーム | 2 | {重点} |
+            | NFR | 非機能要件, セキュリティ要件, 合意書, スコープ+変更台帳 | 3 | {重点} |
+            ```
+    rules:
+      - condition: 計画が完了した
+        next: generate-core
+      - condition: プロジェクト情報が全く不足しており計画を立てられない
+        next: ABORT
+
+  # Phase 2: コアドキュメント生成（BRD、業務フロー、要求一覧）
+  - name: generate-core
+    persona: writer
+    policy: requirements
+    knowledge: documents
+    edit: true
+    required_permission_mode: edit
+    session: continue
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - Edit
+      - Write
+      - Bash
+      - WebSearch
+      - WebFetch
+    instruction_template: |
+      生成計画に基づいて、コアドキュメント（Phase 1）を生成してください。
+
+      **参照する生成計画:**
+      {report:00-generation-plan.md}
+
+      **生成するドキュメント:**
+      1. ビジネス要件定義書（BRD）
+      2. 業務フロー図（As-Is / To-Be）
+      3. 要求一覧
+
+      **やること:**
+      1. 生成計画の仮定とプロジェクト情報に基づいてドキュメントを生成する
+      2. ID体系に従ってIDを付与する
+      3. 業務フロー図はDraw.ioのMCPサーバーでフローチャートとして作成する
+         - As-Is業務フローとTo-Be業務フローをそれぞれ作成
+         - MCPツールの `drawio_create_diagram` を使用してdrawioファイルを生成
+      4. 各ドキュメントをレポートディレクトリに出力する
+      5. 不明な項目は「※要確認」を付けて仮の内容で埋める
+    output_contracts:
+      report:
+        - name: 01-brd.md
+          format: |
+            ```markdown
+            # ビジネス要件定義書（BRD）
+            ## プロジェクトの目的・背景
+            ## ビジネスゴール・KPI
+            ## 対象ユーザー・ステークホルダー
+            ## スコープ（対象範囲・対象外）
+            ## 期待される効果
+            ## 前提条件・制約条件
+            ```
+        - name: 02-business-flow.md
+          format: |
+            ```markdown
+            # 業務フロー図
+            ## As-Is（現状業務フロー）
+            ※ Draw.ioのMCPサーバーでフローチャートを作成する
+            ## 課題一覧
+            ## To-Be（改善後業務フロー）
+            ※ Draw.ioのMCPサーバーでフローチャートを作成する
+            ## システム化対象範囲
+            ## 業務ルール
+            ```
+        - name: 03-requirements-list.md
+          format: |
+            ```markdown
+            # 要求一覧
+            | 要求ID | 要求内容 | 要求元 | 優先度 | 対応方針 | 関連機能ID |
+            |--------|---------|--------|--------|---------|-----------|
+            | REQ-001 | {要求} | {要求元} | {優先度} | 採用 | FUNC-NNN |
+            ```
+    rules:
+      - condition: コアドキュメントの生成が完了した
+        next: generate-screens
+      - condition: 生成を続行できない
+        next: ABORT
+
+  # Phase 3: 画面系ドキュメント生成
+  - name: generate-screens
+    persona: writer
+    policy: requirements
+    knowledge: documents
+    edit: true
+    required_permission_mode: edit
+    session: continue
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - Edit
+      - Write
+      - Bash
+      - WebSearch
+      - WebFetch
+    instruction_template: |
+      コアドキュメントに基づいて、画面系ドキュメント（Phase 2）を生成してください。
+
+      **参照するドキュメント:**
+      - 生成計画: {report:00-generation-plan.md}
+      - 要求一覧: {report:03-requirements-list.md}
+
+      **生成するドキュメント:**
+      1. 機能一覧
+      2. 画面一覧
+      3. 画面遷移図
+      4. ワイヤーフレーム
+
+      **やること:**
+      1. 要求一覧のREQ-IDと機能一覧のFUNC-IDを対応付ける
+      2. 機能一覧のFUNC-IDと画面一覧のSCR-IDを対応付ける
+      3. 画面遷移図はDraw.ioのMCPサーバーで状態遷移図として作成する
+         - MCPツールの `drawio_create_diagram` を使用してdrawioファイルを生成
+      4. ワイヤーフレームは主要画面のみDraw.ioのMCPサーバーでUIモックアップとして作成する
+         - MCPツールの `drawio_create_diagram` を使用してdrawioファイルを生成
+    output_contracts:
+      report:
+        - name: 04-function-list.md
+          format: |
+            ```markdown
+            # 機能一覧
+            | 機能ID | 機能名 | 機能概要 | 優先度 | 関連要求ID | 関連画面ID |
+            |--------|--------|---------|--------|-----------|-----------|
+            | FUNC-001 | {名称} | {概要} | {優先度} | REQ-NNN | SCR-NNN |
+            ```
+        - name: 05-screen-list.md
+          format: |
+            ```markdown
+            # 画面一覧
+            | 画面ID | 画面名 | 画面種別 | 概要・用途 | 関連機能ID |
+            |--------|--------|---------|-----------|-----------|
+            | SCR-001 | {名称} | {種別} | {概要} | FUNC-NNN |
+            ```
+        - name: 06-screen-transition.md
+          format: |
+            ```markdown
+            # 画面遷移図
+            ※ Draw.ioのMCPサーバーで状態遷移図を作成する
+            ## 遷移条件一覧
+            | 遷移元 | 遷移先 | トリガー | 条件 |
+            |--------|--------|---------|------|
+            ```
+        - name: 07-wireframes.md
+          format: |
+            ```markdown
+            # ワイヤーフレーム
+            ## {画面名}（SCR-NNN）
+            ※ Draw.ioのMCPサーバーでUIモックアップを作成する
+            ### UI要素
+            | 要素 | 種別 | 説明 |
+            |------|------|------|
+            ```
+    rules:
+      - condition: 画面系ドキュメントの生成が完了した
+        next: generate-nfr
+      - condition: 生成を続行できない
+        next: ABORT
+
+  # Phase 4: 非機能要件系・管理系ドキュメント生成
+  - name: generate-nfr
+    persona: writer
+    policy: requirements
+    knowledge: documents
+    edit: true
+    required_permission_mode: edit
+    session: continue
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - Edit
+      - Write
+      - Bash
+      - WebSearch
+      - WebFetch
+    instruction_template: |
+      これまでのドキュメントに基づいて、非機能要件系・管理系ドキュメント（Phase 3）を生成してください。
+
+      **参照するドキュメント:**
+      - 生成計画: {report:00-generation-plan.md}
+      - BRD: {report:01-brd.md}
+      - 機能一覧: {report:04-function-list.md}
+
+      **生成するドキュメント:**
+      1. 非機能要件定義書（IPA非機能要求グレード6大項目に準拠）
+      2. セキュリティ要件定義書
+      3. 要件合意書
+      4. プロジェクトスコープ記述書 + 変更管理台帳
+
+      **やること:**
+      1. BRDのKPIから非機能要件の数値目標を導出する
+      2. IPA非機能要求グレードの6大項目を網羅する
+      3. セキュリティ要件はOWASP Top 10を参考にする
+      4. 合意書はBRDとスコープの内容を参照する
+    output_contracts:
+      report:
+        - name: 08-nfr.md
+          format: |
+            ```markdown
+            # 非機能要件定義書
+            ## 可用性
+            ## 性能・拡張性
+            ## 運用・保守性
+            ## 移行性
+            ## セキュリティ（概要）
+            ## システム環境
+            ```
+        - name: 09-security.md
+          format: |
+            ```markdown
+            # セキュリティ要件定義書
+            ## 認証・認可方式
+            ## データ暗号化方針
+            ## アクセス制御
+            ## 監査ログ
+            ## 脆弱性対策
+            ```
+        - name: 10-agreement.md
+          format: |
+            ```markdown
+            # 要件合意書
+            ## 合意対象の要件範囲
+            ## 前提条件
+            ## 除外事項
+            ## 変更手続き
+            ## 合意者署名欄
+            ```
+        - name: 11-scope-and-change.md
+          format: |
+            ```markdown
+            # プロジェクトスコープ記述書
+            ## プロジェクトスコープ
+            ## プロダクトスコープ
+            ## 主要な成果物一覧
+            ## 除外事項
+            ## 制約条件・前提条件
+
+            ---
+
+            # 変更管理台帳
+            | 変更要求ID | 変更内容 | 影響範囲 | 優先度 | 承認状況 | 対応日 |
+            |-----------|---------|---------|--------|---------|--------|
+            | CHG-001 | （初版のため変更なし） | - | - | - | - |
+            ```
+    rules:
+      - condition: 全ドキュメントの生成が完了した
+        next: validate
+      - condition: 生成を続行できない
+        next: ABORT
+
+  # Phase 5: 生成結果の検証
+  - name: validate
+    persona: supervisor
+    policy: requirements
+    knowledge:
+      - documents
+      - consistency
+    edit: false
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+    instruction_template: |
+      生成された11種のドキュメントを検証してください。
+
+      **参照するレポート:**
+      - 生成計画: {report:00-generation-plan.md}
+      - BRD: {report:01-brd.md}
+      - 業務フロー: {report:02-business-flow.md}
+      - 要求一覧: {report:03-requirements-list.md}
+      - 機能一覧: {report:04-function-list.md}
+      - 画面一覧: {report:05-screen-list.md}
+      - 画面遷移図: {report:06-screen-transition.md}
+      - ワイヤーフレーム: {report:07-wireframes.md}
+      - 非機能要件: {report:08-nfr.md}
+      - セキュリティ要件: {report:09-security.md}
+      - 合意書: {report:10-agreement.md}
+      - スコープ+変更台帳: {report:11-scope-and-change.md}
+
+      **検証観点:**
+      1. 全11種のドキュメントが生成されているか
+      2. ID体系が全ドキュメントで統一されているか
+      3. 上流→下流のID参照が整合しているか
+      4. Draw.ioで図が作成されているか（業務フロー、画面遷移図、ワイヤーフレーム）
+      5. 空欄セクションがないか（仮の内容 + ※要確認 は可）
+      6. プロジェクト概要の情報が正しく反映されているか
+
+      **問題がある場合:** gather-infoへの具体的なフィードバックを含めること。
+    rules:
+      - condition: 全ドキュメントが十分な品質で生成されている
+        next: COMPLETE
+      - condition: 重大な問題があり、計画から修正が必要
+        next: gather-info
