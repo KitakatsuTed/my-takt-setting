@@ -4,9 +4,9 @@
 
 このディレクトリは、[takt](https://github.com/nrslib/takt)（Claude Code用ワークフローライブラリ）をカスタマイズした設定群です。
 
-Webアプリ開発プロジェクト（開発者3〜6名、クライアント協業体制）において、**要件定義ドキュメントの作成・整合性チェック・品質レビューをAIで効率化する**ことを目的としています。
+Webアプリ開発プロジェクト（開発者3〜6名、クライアント協業体制）において、**要件定義ドキュメントの作成・品質レビュー・整合性チェック・修正までをAIで一貫実行する**ことを目的としています。
 
-具体的には、プロジェクト概要を入力するだけで、IPA共通フレーム2013やBABOK v3に準拠した11種類の要件定義ドキュメントを自動生成し、ドキュメント間の整合性チェックや品質レビューまでをClaude Codeのワークフローとして実行できます。
+具体的には、プロジェクト概要を入力するだけで、IPA共通フレーム2013やBABOK v3に準拠した11種類の要件定義ドキュメントを自動生成し、品質レビュー・整合性チェック・修正までをClaude Codeのワークフローとして実行できます。High問題が0件になるまで自動でループし、最大10回まで繰り返します。
 
 ## 前提条件
 
@@ -41,8 +41,9 @@ taktはClaude Code上で動作します。Claude Codeがインストールされ
 ├── facets/                   ← Persona・Policy・Knowledge・テンプレートの定義
 │   ├── personas/             ← AIエージェントの役割定義
 │   │   ├── requirements-planner.md   ← 要件定義計画者（生成計画を立案）
-│   │   ├── requirements-writer.md    ← 要件定義書作成者（ドキュメントを生成）
-│   │   └── requirements-checker.md   ← 整合性チェック専門家（矛盾・漏れを検出）
+│   │   ├── requirements-writer.md    ← 要件定義書作成者（ドキュメントを生成・修正）
+│   │   ├── requirements-checker.md   ← 品質レビュー・整合性チェック専門家
+│   │   └── requirements-supervisor.md ← 統合判定・品質管理（レビュー＋チェック結果を統合判定）
 │   │
 │   ├── policies/             ← 品質・行動規範
 │   │   └── requirements.md           ← 要件定義ポリシー（ID体系、品質基準、REJECT/OK判定）
@@ -55,9 +56,7 @@ taktはClaude Code上で動作します。Claude Codeがインストールされ
 │       └── requirements-template.md  ← 11種のドキュメントのMarkdownテンプレート
 │
 └── pieces/                   ← 実行可能なワークフロー定義
-    ├── requirements-generator.yaml     ← テンプレート自動生成
-    ├── requirements-consistency.yaml   ← 整合性チェック
-    └── requirements-review.yaml        ← 品質レビュー
+    └── requirements-generator.yaml     ← ドキュメント生成・レビュー・チェック・修正の一貫実行
 ```
 
 ### facets/ の各ファイルの役割
@@ -65,8 +64,9 @@ taktはClaude Code上で動作します。Claude Codeがインストールされ
 | ファイル | 種別 | 役割 |
 |---------|------|------|
 | `personas/requirements-planner.md` | Persona | プロジェクト概要を分析し、11種のドキュメント生成計画とID体系を立案する。質問せず、不足情報には仮定を置いて自律的に進める |
-| `personas/requirements-writer.md` | Persona | 生成計画に基づいてドキュメントを作成する。IPA共通フレーム2013・BABOK v3に準拠し、Draw.ioで図表も作成する |
-| `personas/requirements-checker.md` | Persona | ドキュメント間のID参照整合性、網羅性、用語一貫性、意味的矛盾を検出する。重大度（High/Medium/Low）付きで報告する |
+| `personas/requirements-writer.md` | Persona | 生成計画に基づいてドキュメントを作成・修正する。IPA共通フレーム2013・BABOK v3に準拠し、Draw.ioで図表も作成する |
+| `personas/requirements-checker.md` | Persona | ドキュメントの品質レビュー（ビジネス・UX・技術）と整合性チェック（ID参照・網羅性・用語・意味的矛盾）を実施する。重大度（High/Medium/Low）付きで報告する |
+| `personas/requirements-supervisor.md` | Persona | 品質レビューと整合性チェックの結果を統合し、High問題の有無を判定する。修正指示を具体的に提示する |
 | `policies/requirements.md` | Policy | ID体系の統一、自律行動、ドキュメント品質、図表品質に関するREJECT/OK判定基準を定義 |
 | `knowledge/requirements-documents.md` | Knowledge | コアドキュメント11種の構成（セクション・カラム）とドキュメント間の依存関係 |
 | `knowledge/consistency-patterns.md` | Knowledge | ID参照整合性・名称一貫性・網羅性・意味的矛盾・図表整合性のチェックパターンとトレーサビリティマトリクス |
@@ -74,65 +74,29 @@ taktはClaude Code上で動作します。Claude Codeがインストールされ
 
 ## 使い方
 
-### requirements-generator: テンプレート自動生成
+### requirements-generator: ドキュメント生成・レビュー・チェック・修正
 
-プロジェクト概要から11種のコアドキュメントを一括生成します。
+プロジェクト概要から11種のコアドキュメントを一括生成し、品質レビュー・整合性チェック・修正までを自動実行します。
 
 ```bash
 takt run requirements-generator
 ```
 
-**処理の流れ（5ステップ、最大20ムーブメント）:**
+**処理の流れ（8ステップ、最大50ムーブメント）:**
 
-1. **gather-info** (Planner) -- プロジェクト概要を分析し、仮定を設定、ID体系を定義、生成計画を立案
-2. **generate-core** (Writer) -- BRD、業務フロー図（As-Is/To-Be）、要求一覧を生成
-3. **generate-screens** (Writer) -- 機能一覧、画面一覧、画面遷移図、ワイヤーフレームを生成
-4. **generate-nfr** (Writer) -- 非機能要件定義書、セキュリティ要件定義書、要件合意書、スコープ記述書+変更管理台帳を生成
-5. **validate** (Supervisor) -- 全11種のドキュメントを検証し、問題があればgather-infoに差し戻し
+1. **gather-info** (Planner) — プロジェクト概要を分析し、仮定を設定、ID体系を定義、生成計画を立案
+2. **generate-core** (Writer) — BRD、業務フロー図（As-Is/To-Be）、要求一覧を生成
+3. **generate-screens** (Writer) — 機能一覧、画面一覧、画面遷移図、ワイヤーフレームを生成
+4. **generate-nfr** (Writer) — 非機能要件定義書、セキュリティ要件定義書、要件合意書、スコープ記述書+変更管理台帳を生成
+5. **reviewers** (Checker x3 並列実行) — ビジネス・UX・技術の3観点から品質レビュー
+6. **checkers** (Checker x4 並列実行) — ID参照整合性・網羅性・用語一貫性・意味的整合性の4観点をチェック
+7. **synthesize** (Supervisor) — レビュー＋チェック結果を統合し、High問題の有無を判定
+8. **fix** (Writer) — High問題に基づいてドキュメントを修正
+
+**ループ:** ステップ5〜8をHigh問題が0件になるまで繰り返す（最大約10回）。上限到達時は残存するHigh問題を一覧で報告して終了。
 
 **入力:** プロジェクト概要（自由テキスト）
-**出力:** 12ファイル（生成計画 + 11種のドキュメント）
-
-### requirements-consistency: 整合性チェック
-
-生成済みの要件定義ドキュメント間の矛盾・漏れを検出します。
-
-```bash
-takt run requirements-consistency
-```
-
-**処理の流れ（3ステップ、最大10ムーブメント）:**
-
-1. **gather** (Planner) -- ドキュメントを収集し、ID体系を特定、チェック準備
-2. **checkers** (Checker x4 並列実行) -- 以下の4観点を同時にチェック
-   - **ID参照整合性**: ダングリング参照、孤立IDの検出
-   - **網羅性**: BRDゴール→要求→機能のトレーサビリティ検証
-   - **用語一貫性**: 名称揺れ、未定義用語の検出
-   - **意味的矛盾**: BRDとスコープの矛盾、非機能要件との不整合の検出
-3. **synthesize** (Supervisor) -- 4つのチェック結果を重大度順に統合し、修正優先順位を提示
-
-**入力:** 要件定義ドキュメント群（ディレクトリ指定）
-**出力:** 6ファイル（チェック対象情報 + 4観点チェック結果 + 統合レポート）
-
-### requirements-review: 品質レビュー
-
-要件定義ドキュメントの品質をビジネス・UX・技術の3観点からレビューします。
-
-```bash
-takt run requirements-review
-```
-
-**処理の流れ（3ステップ、最大10ムーブメント）:**
-
-1. **gather** (Planner) -- ドキュメントを把握し、プロジェクト特性を理解、レビュー準備
-2. **reviewers** (Checker x3 並列実行) -- 以下の3観点を同時にレビュー
-   - **ビジネス観点**: ゴールの明確さ、KPIの定量性、スコープの適切さ、ROIの現実性
-   - **UX観点**: 業務フローの効率性、画面遷移の自然さ、UIの使いやすさ、エラーケースの考慮
-   - **技術観点**: 技術的実現可能性、非機能要件の現実性、セキュリティ要件の十分性、開発規模の妥当性
-3. **synthesize** (Supervisor) -- 3つのレビュー結果を統合し、総合評価（A〜D）と改善提案を提示
-
-**入力:** 要件定義ドキュメント群（ディレクトリ指定）
-**出力:** 5ファイル（レビュー対象情報 + 3観点レビュー結果 + 統合レポート）
+**出力:** 生成計画 + 11種のドキュメント + 品質判定レポート
 
 ## コアドキュメント11種
 
@@ -217,4 +181,4 @@ BRD
 
 ### ワークフローの変更
 
-`pieces/` 内のYAMLファイルを編集します。ムーブメントの追加・削除・順序変更が可能です。例えば、新しいレビュー観点を追加したい場合は、`requirements-review.yaml` の `parallel` セクションにムーブメントを追加します。
+`pieces/requirements-generator.yaml` を編集します。ムーブメントの追加・削除・順序変更が可能です。例えば、新しいレビュー観点を追加したい場合は、`reviewers` の `parallel` セクションにサブムーブメントを追加します。
