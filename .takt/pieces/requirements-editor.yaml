@@ -1,0 +1,70 @@
+name: requirements-editor
+description: ユーザー指示に基づいて要件定義書を更新し、レビューで品質を保証する
+max_movements: 8
+initial_movement: update-docs
+interactive_mode: assistant
+
+personas:
+  doc-updater: ../facets/personas/requirements-doc-updater.md
+  reviewer: ../facets/personas/requirements-reviewer.md
+
+policies:
+  requirements: ../facets/policies/requirements.md
+
+knowledge:
+  documents: ../facets/knowledge/requirements-documents.md
+  consistency: ../facets/knowledge/consistency-patterns.md
+
+instructions:
+  update-docs: ../facets/instructions/update-docs.md
+  review-updates: ../facets/instructions/review-updates.md
+
+report_formats:
+  update-review: ../facets/output-contracts/update-review.md
+
+movements:
+  # ドキュメント更新
+  - name: update-docs
+    persona: doc-updater
+    policy: requirements
+    knowledge: documents
+    edit: true
+    required_permission_mode: edit
+    session: continue
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+      - Edit
+      - Write
+      - Bash
+    instruction: update-docs
+    rules:
+      - condition: 更新が完了した
+        next: review
+      - condition: 更新を続行できない
+        next: ABORT
+
+  # 更新レビュー
+  - name: review
+    persona: reviewer
+    policy: requirements
+    knowledge:
+      - documents
+      - consistency
+    edit: false
+    pass_previous_response: false
+    allowed_tools:
+      - Read
+      - Glob
+      - Grep
+    instruction: review-updates
+    output_contracts:
+      report:
+        - name: update-review.md
+          format: update-review
+    rules:
+      - condition: OK（問題なし）
+        next: COMPLETE
+      - condition: 要修正（High問題あり）
+        next: update-docs
