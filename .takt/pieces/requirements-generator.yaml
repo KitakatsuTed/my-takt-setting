@@ -13,7 +13,7 @@ interactive_mode: assistant
 personas:
   planner: ../facets/personas/requirements-planner.md
   writer: ../facets/personas/requirements-writer.md
-  supervisor: research-supervisor
+  supervisor: ../facets/personas/requirements-supervisor.md
 
 policies:
   requirements: ../facets/policies/requirements.md
